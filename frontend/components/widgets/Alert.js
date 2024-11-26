@@ -28,6 +28,8 @@ const GET_DONATE_SUB = gql`
 
 const AlertComponent = () => {
   const [isVisible, setIsVisible] = useState(false);
+  const [donationQueue, setDonationQueue] = useState([]);
+  const [currentDonation, setCurrentDonation] = useState();
 
   const query = useSearchParams();
   const streamKey = query.get("stream_key");
@@ -44,56 +46,80 @@ const AlertComponent = () => {
     },
   });
 
+  // Masukkan ke antrian
   useEffect(() => {
-    let timeout;
     if (donateData) {
+      setDonationQueue((prevDonate) => [...prevDonate, donateData.donationCreated]);
+    }
+    // let timeout;
+    // if (donateData) {
+    //   timeout = setTimeout(() => {
+    //     setIsVisible(true);
+    //     setTimeout(() => {
+    //       setIsVisible(false);
+    //     }, data.getUserPreference.duration);
+    //   }, data.getUserPreference.duration);
+    // }
+
+    // return () => {
+    //   clearTimeout(timeout);
+    // };
+  }, [donateData]);
+
+  // Tampilkan antrian dan hapus
+  useEffect(() => {
+    console.log(donationQueue);
+    let timeout;
+    if (donationQueue.length > 0) {
+      const nextDonation = donationQueue[0];
+      setCurrentDonation(nextDonation);
+      setIsVisible(true);
+
       timeout = setTimeout(() => {
-        setIsVisible(true);
-        setTimeout(() => {
-          setIsVisible(false);
-        }, data.getUserPreference.duration);
-      }, data.getUserPreference.duration);
+        setIsVisible(false);
+        setDonationQueue((prevQueue) => prevQueue.slice(1)); // Hapus donasi yang sudah ditampilkan
+      }, data?.getUserPreference.duration || 5000);
     }
 
     return () => {
       clearTimeout(timeout);
     };
-  }, [donateData, data]);
+  }, [donationQueue, data]);
 
   if (error) {
     notFound();
   }
-  if (data) {
-    console.log(data.getUserPreference);
-  }
+  // if (data) {
+  //   console.log(data.getUserPreference);
+  // }
 
-  if (donateData) {
-    console.log(donateData.donationCreated);
-  }
+  // if (donateData) {
+  //   console.log(donateData.donationCreated);
+  // }
 
   return (
     <>
       {loading && <p className="text-center">Loading....</p>}
-      {data && donateData && isVisible && (
+      {data && currentDonation && isVisible && (
         // <p>{donationQueue[0].message}</p>
         <div
           className="p-4 m-4 w-100 text-sm rounded-lg shadow-[8px_8px_0px_rgba(0,0,0,1)] "
           style={{ backgroundColor: data.getUserPreference.background_color }}
         >
-          <p className="text-center text-5xl">
+          <p className="text-5xl text-center">
             <span className="font-medium" style={{ color: data.getUserPreference.highlight_color }}>
-              {donateData.donationCreated.name}
+              {currentDonation.name}
             </span>{" "}
             <span style={{ color: data.getUserPreference.color_text }}>
               {data.getUserPreference.template_text}
             </span>
             <span className="font-medium" style={{ color: data.getUserPreference.highlight_color }}>
-              {formatRupiah(donateData.donationCreated.amount)}
+              {formatRupiah(currentDonation.amount)}
             </span>
           </p>
-          <p className="text-center text-4xl">
+          <p className="text-4xl text-center">
             <span className="font-bold" style={{ color: data.getUserPreference.color_text }}>
-              {donateData.donationCreated.message}
+              {currentDonation.message}
             </span>
           </p>
         </div>
