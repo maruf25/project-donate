@@ -15,6 +15,15 @@ module.exports = `
     createdAt: String!
   }
 
+  type DonationWithToken{
+    id: ID!
+    name: String!
+    message: String!
+    amount: String!
+    createdAt: String!
+    token: String!
+  }
+
   type Preference{
     id: ID!
     background_color: String!
@@ -53,8 +62,9 @@ module.exports = `
   type Mutation {
     createUser(userInput:UserInputData): User!
     loginUser(email:String!,password:String!): AuthData!
-    createDonation(donationInput: DonationInputData!): Donation!
+    createDonation(donationInput: DonationInputData!): DonationWithToken!
     replayDonation(donationId: ID!): Donation!
+    payment(donationId: ID!,status : String!): String!
   }
 
   type Subscription {

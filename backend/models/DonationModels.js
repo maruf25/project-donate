@@ -24,6 +24,10 @@ const DonationModels = db.define(
       type: DataTypes.FLOAT,
       allowNull: false,
     },
+    payment: {
+      type: DataTypes.ENUM("PENDING", "SUCCESS", "FAILED"),
+      allowNull: false,
+    },
   },
   {
     timestamps: true,

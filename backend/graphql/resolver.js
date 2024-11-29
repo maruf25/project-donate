@@ -5,12 +5,20 @@ const validator = require("validator");
 const { v4: uuidv4 } = require("uuid");
 require("dotenv").config();
 const { PubSub } = require("graphql-subscriptions");
+const midtransClient = require("midtrans-client");
 
 const pubsub = new PubSub();
 
 const User = require("../models/UserModels");
 const Preference = require("../models/PreferenceModel");
 const Donation = require("../models/DonationModels");
+const { payment, replayDonation } = require("../controller/donations");
+
+let snap = new midtransClient.Snap({
+  isProduction: false,
+  serverKey: process.env.SERVER_KEY,
+  // clientKey: process.env.CLIENT_KEY,
+});
 
 module.exports = {
   Query: {
@@ -196,53 +204,33 @@ module.exports = {
         message,
         amount: parseFloat(amount),
         userId: user.id,
+        payment: "PENDING",
       });
-      // console.log(user.preference.duration);
 
-      // Tampilkan berdasarkan urutan
-      setTimeout(() => {
-        pubsub.publish("ALERT" + user.stream_key, {
-          donationCreated: {
-            ...donation.dataValues,
-            amount: donation.dataValues.amount.toString(),
-          },
-        });
-      }, user.preference.duration);
+      // Buat Midtrans Payemnt
+      let parameter = {
+        "transaction_details": {
+          "order_id": donation.dataValues.id,
+          "gross_amount": donation.dataValues.amount,
+        },
+        "customer_details": {
+          "first_name": donation.dataValues.name,
+        },
+      };
 
-      return { ...donation.dataValues, amount: donation.dataValues.amount.toString() };
+      const transaction = await snap.createTransaction(parameter);
+
+      return {
+        ...donation.dataValues,
+        amount: donation.dataValues.amount.toString(),
+        token: transaction.token,
+      };
     },
     replayDonation: async (_, { donationId }, contextValue, info) => {
-      if (!contextValue.isAuth) {
-        throw new GraphQLError("Not Authenticated", {
-          extensions: { code: "NOT_AUTHENTICATED" },
-        });
-      }
-      const userId = contextValue.userId;
-      const donation = await Donation.findOne({
-        where: { id: donationId },
-        include: { model: User, include: { model: Preference } },
-      });
-      if (donation.user.id !== userId) {
-        throw new GraphQLError("Not Authorized", {
-          extensions: { code: "NOT_AUTHORIZED" },
-        });
-      }
-      if (!donation) {
-        throw new GraphQLError("Donation could not found", {
-          extensions: { code: 404 },
-        });
-      }
-
-      // console.log(donation.user.preference.duration);
-
-      // Tampilkan berdasarkan urutan
-      pubsub.publish("ALERT" + donation.user.stream_key, {
-        donationCreated: {
-          ...donation.dataValues,
-          amount: donation.dataValues.amount.toString(),
-        },
-      });
-      return { ...donation.dataValues, amount: donation.dataValues.amount.toString() };
+      return await replayDonation(donationId, contextValue, pubsub);
+    },
+    payment: async (_, { donationId, status }, contextValue, info) => {
+      return await payment(donationId, status, pubsub);
     },
   },
   Subscription: {

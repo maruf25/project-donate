@@ -1,6 +1,6 @@
 "use client";
 import { useMutation, gql } from "@apollo/client";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { formatRupiah } from "@/utils/FormatRP";
 
 const CREATE_DONATION = gql`
@@ -8,10 +8,18 @@ const CREATE_DONATION = gql`
     createDonation(
       donationInput: { name: $name, message: $message, amount: $amount, username: $username }
     ) {
+      id
       name
       message
       amount
+      token
     }
+  }
+`;
+
+const PAYMENT = gql`
+  mutation MakePayment($donationId: ID!, $status: String!) {
+    payment(donationId: $donationId, status: $status)
   }
 `;
 
@@ -20,7 +28,29 @@ const DonationForm = ({ username }) => {
   const messageRef = useRef();
   const [inputValue, setInputValue] = useState("");
 
-  const [createDonation, { data, loading, error }] = useMutation(CREATE_DONATION);
+  const [createDonation] = useMutation(CREATE_DONATION);
+  const [payment, { data, loading, error }] = useMutation(PAYMENT);
+
+  useEffect(() => {
+    // You can also change below url value to any script url you wish to load,
+    // for example this is snap.js for Sandbox Env (Note: remove `.sandbox` from url if you want to use production version)
+    const midtransScriptUrl = "https://app.sandbox.midtrans.com/snap/snap.js";
+
+    let scriptTag = document.createElement("script");
+    scriptTag.src = midtransScriptUrl;
+
+    // Optional: set script attribute, for example snap.js have data-client-key attribute
+    // (change the value according to your client-key)
+    // eslint-disable-next-line no-undef
+    const myMidtransClientKey = process.env.NEXT_PUBLIC_CLIENT_KEY;
+    scriptTag.setAttribute("data-client-key", myMidtransClientKey);
+
+    document.body.appendChild(scriptTag);
+
+    return () => {
+      document.body.removeChild(scriptTag);
+    };
+  }, []);
 
   let errorMessages = {};
   const classNameNotError = "block mb-2 text-sm font-medium text-white";
@@ -63,6 +93,55 @@ const DonationForm = ({ username }) => {
         return;
       }
 
+      console.log(response);
+
+      window.snap.pay(response.data.createDonation.token, {
+        onSuccess: async function () {
+          try {
+            await payment({
+              variables: {
+                donationId: response.data.createDonation.id,
+                status: "SUCCESS",
+              },
+            });
+            console.log("SUCCESS");
+          } catch (error) {
+            console.log(error);
+          }
+        },
+        onPending: function (result) {
+          console.log("pending");
+          console.log(result);
+        },
+        onError: async function () {
+          try {
+            await payment({
+              variables: {
+                donationId: response.data.createDonation.id,
+                status: "FAILED",
+              },
+            });
+            console.log("FAILED");
+          } catch (error) {
+            console.log(error);
+          }
+        },
+        onClose: async function () {
+          try {
+            const result = await payment({
+              variables: {
+                donationId: response.data.createDonation.id,
+                status: "CANCEL",
+              },
+            });
+            console.log("CANCEL");
+            console.log(result);
+          } catch (error) {
+            console.log(error);
+          }
+        },
+      });
+
       setInputValue("");
       nameRef.current.value = "";
       messageRef.current.value = "";
@@ -71,18 +150,9 @@ const DonationForm = ({ username }) => {
     }
   };
 
-  // let amountValue;
-  // if (inputValue) {
-  //   amountValue = inputValue.split(" ")[1].replace(/\./g, "");
-  // }
-
-  // console.log(amountValue); // Output: "50000"
-
-  // console.log(inputValue.split(" ")[1]); // Untuk mendapatkan angka saja misal 50.000
-
   return (
     <>
-      <div className="flex flex-col items-center rounded-lg  md:flex-row md:max-w-xl mt-10 ">
+      <div className="flex flex-col items-center mt-10 rounded-lg md:flex-row md:max-w-xl ">
         <img
           className="object-cover w-full rounded-t-lg h-96 md:h-auto md:w-48 md:rounded-none md:rounded-l-lg"
           src="https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Fwww.pngall.com%2Fwp-content%2Fuploads%2F5%2FUser-Profile-PNG-Clipart.png&f=1&nofb=1&ipt=320256434ee3e766224cc611084c7f6638cc537c7b252ef3eced92fba9db851c&ipo=images"
@@ -97,8 +167,10 @@ const DonationForm = ({ username }) => {
           </p>
         </div>
       </div>
-      <div className="w-full mt-20 max-w-xl p-4 bg-white border border-gray-200 rounded-lg shadow sm:p-6 md:p-8 dark:bg-gray-800 dark:border-gray-700">
-        {data && <p className="text-center text-green-500">Donation Succesfully</p>}
+      <div className="w-full max-w-xl p-4 mt-20 bg-white border border-gray-200 rounded-lg shadow sm:p-6 md:p-8 dark:bg-gray-800 dark:border-gray-700">
+        {data && data.payment === "SUCCESS" && (
+          <p className="text-center text-green-500">Donation Succesfully</p>
+        )}
         <form onSubmit={handleSubmit}>
           <div className="mb-6">
             <label

@@ -1,7 +1,7 @@
 "use client";
 import { notFound, useSearchParams } from "next/navigation";
 import { gql, useQuery, useSubscription } from "@apollo/client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { formatRupiah } from "@/utils/FormatRP";
 
 const GET_USER_PREFRENCE = gql`
@@ -30,6 +30,7 @@ const AlertComponent = () => {
   const [isVisible, setIsVisible] = useState(false);
   const [donationQueue, setDonationQueue] = useState([]);
   const [currentDonation, setCurrentDonation] = useState();
+  const audioRef = useRef();
 
   const query = useSearchParams();
   const streamKey = query.get("stream_key");
@@ -51,57 +52,46 @@ const AlertComponent = () => {
     if (donateData) {
       setDonationQueue((prevDonate) => [...prevDonate, donateData.donationCreated]);
     }
-    // let timeout;
-    // if (donateData) {
-    //   timeout = setTimeout(() => {
-    //     setIsVisible(true);
-    //     setTimeout(() => {
-    //       setIsVisible(false);
-    //     }, data.getUserPreference.duration);
-    //   }, data.getUserPreference.duration);
-    // }
-
-    // return () => {
-    //   clearTimeout(timeout);
-    // };
   }, [donateData]);
 
   // Tampilkan antrian dan hapus
   useEffect(() => {
-    console.log(donationQueue);
-    let timeout;
-    if (donationQueue.length > 0) {
+    if (donationQueue.length > 0 && !isVisible) {
+      console.log("start");
       const nextDonation = donationQueue[0];
       setCurrentDonation(nextDonation);
+
+      audioRef.current.src = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3";
+      audioRef.current.muted = false;
+      audioRef.current.play();
+
+      // Menghentikan pemutaran setelah 3 detik
+      setTimeout(() => {
+        if (audioRef.current) {
+          audioRef.current.pause();
+        }
+      }, 3000);
+
       setIsVisible(true);
 
-      timeout = setTimeout(() => {
+      setTimeout(() => {
+        console.log("selesai");
+
         setIsVisible(false);
-        setDonationQueue((prevQueue) => prevQueue.slice(1)); // Hapus donasi yang sudah ditampilkan
+        setDonationQueue((prevQueue) => prevQueue.slice(1));
       }, data?.getUserPreference.duration || 5000);
     }
-
-    return () => {
-      clearTimeout(timeout);
-    };
-  }, [donationQueue, data]);
+  }, [donationQueue, data?.getUserPreference.duration, isVisible]);
 
   if (error) {
     notFound();
   }
-  // if (data) {
-  //   console.log(data.getUserPreference);
-  // }
-
-  // if (donateData) {
-  //   console.log(donateData.donationCreated);
-  // }
 
   return (
     <>
+      <audio ref={audioRef} muted></audio>
       {loading && <p className="text-center">Loading....</p>}
       {data && currentDonation && isVisible && (
-        // <p>{donationQueue[0].message}</p>
         <div
           className="p-4 m-4 w-100 text-sm rounded-lg shadow-[8px_8px_0px_rgba(0,0,0,1)] "
           style={{ backgroundColor: data.getUserPreference.background_color }}
@@ -124,7 +114,6 @@ const AlertComponent = () => {
           </p>
         </div>
       )}
-      {/* <div>{streamKey}</div> */}
     </>
   );
 };
